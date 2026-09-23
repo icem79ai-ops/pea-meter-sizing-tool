@@ -31,7 +31,7 @@ function renderPresets() {
     var b = document.createElement('button');
     b.type = 'button';
     b.className = 'preset-btn';
-    b.innerHTML = '<span class="preset-name">' + esc(pr.name) + '</span><span class="preset-w">' + fmt(pr.w, 0) + ' W' + (pr.btu ? ' · ' + fmt(pr.btu, 0) + ' BTU' : '') + '</span>';
+    b.innerHTML = '<span class="preset-name">' + esc(pr.name) + '</span><span class="preset-w">' + fmt(pr.w, 0) + (pr.va ? ' VA/จุด' : ' W') + (pr.btu ? ' · ' + fmt(pr.btu, 0) + ' BTU' : '') + '</span>';
     b.addEventListener('click', function () { addItem(pr); });
     g.appendChild(b);
   });
@@ -48,6 +48,7 @@ function renderFactors() {
     p.items.forEach(function (it) {
       totalQty += nnum(it.qty);
       var isAc = it.cat === 'ac';
+      var isOutlet = it.cat === 'outlet';
       var btuCell;
       if (isAc) {
         btuCell = '<input class="f-btu" type="number" min="6000" step="1000" data-id="' + it.id + '" value="' + (it.btu || 12000) + '" title="พิมพ์ BTU แล้วกำลังไฟคำนวณให้">';
@@ -57,6 +58,8 @@ function renderFactors() {
       var wCell;
       if (isAc) {
         wCell = '<span class="ac-w">' + fmt(it.w, 0) + '</span>';
+      } else if (isOutlet) {
+        wCell = '<span class="ac-w">' + fmt(it.w, 0) + ' VA/จุด</span>';
       } else {
         wCell = '<input class="f-w" type="number" min="0" step="1" data-id="' + it.id + '" value="' + fmt(it.w, 0) + '">';
       }

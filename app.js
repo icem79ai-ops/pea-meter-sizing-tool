@@ -7,6 +7,7 @@ var V3D = 380;
 /* ค่า DF/PF เริ่มต้นต่อหมวด (วสท. โดยประมาณ) */
 var CATS = {
   lighting: { name: 'แสงสว่าง', pf: 1.0, df: 1.0 },
+  outlet: { name: 'ปลั๊กไฟ/เต้ารับ', pf: 1.0, df: 1.0 },
   ac: { name: 'เครื่องปรับอากาศ', pf: 0.8, df: 0.8 },
   heater: { name: 'เครื่องทำน้ำอุ่น', pf: 1.0, df: 0.75 },
   pump: { name: 'ปั๊มน้ำ/มอเตอร์', pf: 0.8, df: 1.0 },
@@ -33,6 +34,7 @@ function acWatts(btu) {
 var PRESETS = [
   { id: 'led12', cat: 'lighting', name: 'หลอด LED 12W', w: 12, unit: 'ดวง' },
   { id: 'led20', cat: 'lighting', name: 'หลอด LED 20W', w: 20, unit: 'ดวง' },
+  { id: 'outlet', cat: 'outlet', name: 'ปลั๊กไฟเต้ารับ', w: 180, va: true, unit: 'จุด' },
   { id: 'ac', cat: 'ac', name: 'แอร์', w: 1300, btu: 12000, unit: 'ตัว' },
   { id: 'wh100', cat: 'heater', name: 'เครื่องทำน้ำอุ่น' + '\u00a0' + '100' + '\u2009' + 'ล.', w: 4500, unit: 'เครื่อง' },
   { id: 'pump', cat: 'pump', name: 'ปั๊มน้ำอัตโนมัติ' + '\u00a0' + '1/2' + '\u2009' + 'แรงม้า', w: 370, unit: 'เครื่อง' },
@@ -42,8 +44,8 @@ var PRESETS = [
   { id: 'lift', cat: 'ev', name: 'ลิฟต์บ้าน', w: 1800, unit: 'ตัว' }
 ];
 
-/* หมวดเต้ารับ — ยึดตามวิธีคิดของ ปกติคิดเป็นภาระโหลดสม่ำเสมอตามจำนวนจุด */
-var OUTLET_W_PER_POINT = 100; /* W/จุด สำหรับรายงาน */
+/* หมวดเต้ารับ — คิดเป็นภาระโหลดสม่ำเสมอตามจำนวนจุด (มาตรฐาน วสท. ≈ 180 VA/จุด) */
+var OUTLET_W_PER_POINT = 180; /* VA/จุด สำหรับรายงาน */
 
 /* มิเตอร์ PEA: พิกัดกระแส (A)
    ใช้หลักการโหลดไม่เกิน 80% ของพิกัด → ตัวที่เหมาะสมคือ cap ที่ 0.8*cap >= โหลด */
@@ -212,7 +214,7 @@ function renderPresets() {
     var b = document.createElement('button');
     b.type = 'button';
     b.className = 'preset-btn';
-    b.innerHTML = '<span class="preset-name">' + esc(pr.name) + '</span><span class="preset-w">' + fmt(pr.w, 0) + ' W' + (pr.btu ? ' · ' + fmt(pr.btu, 0) + ' BTU' : '') + '</span>';
+    b.innerHTML = '<span class="preset-name">' + esc(pr.name) + '</span><span class="preset-w">' + fmt(pr.w, 0) + (pr.va ? ' VA/จุด' : ' W') + (pr.btu ? ' · ' + fmt(pr.btu, 0) + ' BTU' : '') + '</span>';
     b.addEventListener('click', function () { addItem(pr); });
     g.appendChild(b);
   });
@@ -229,6 +231,7 @@ function renderFactors() {
     p.items.forEach(function (it) {
       totalQty += nnum(it.qty);
       var isAc = it.cat === 'ac';
+      var isOutlet = it.cat === 'outlet';
       var btuCell;
       if (isAc) {
         btuCell = '<input class="f-btu" type="number" min="6000" step="1000" data-id="' + it.id + '" value="' + (it.btu || 12000) + '" title="พิมพ์ BTU แล้วกำลังไฟคำนวณให้">';
@@ -238,6 +241,8 @@ function renderFactors() {
       var wCell;
       if (isAc) {
         wCell = '<span class="ac-w">' + fmt(it.w, 0) + '</span>';
+      } else if (isOutlet) {
+        wCell = '<span class="ac-w">' + fmt(it.w, 0) + ' VA/จุด</span>';
       } else {
         wCell = '<input class="f-w" type="number" min="0" step="1" data-id="' + it.id + '" value="' + fmt(it.w, 0) + '">';
       }
@@ -630,7 +635,7 @@ function sheetItems(ws, p) {
     sheetSetCell(ws, row, 2, catName(it.cat));
     sheetSetCell(ws, row, 3, nnum(it.qty), null, '0');
     sheetSetCell(ws, row, 4, it.btu || '—', null, '0');
-    sheetSetCell(ws, row, 5, nnum(it.w), null, '#,##0');
+    sheetSetCell(ws, row, 5, it.cat === 'outlet' ? nnum(it.w) + ' VA/จุด' : nnum(it.w), null, it.cat === 'outlet' ? null : '#,##0');
     sheetSetCell(ws, row, 6, Math.round(itemPf(it) * 100) / 100, null, '0.00');
     sheetSetCell(ws, row, 7, Math.round(itemDf(it) * 1000) / 10, null, '0.0');
     sheetSetCell(ws, row, 8, Math.round(itemKva(it) * 100) / 100, null, '#,##0.00');
@@ -726,7 +731,7 @@ function buildRows() {
       catName(it.cat),
       it.qty,
       it.btu || '',
-      it.w,
+      it.cat === 'outlet' ? it.w + ' VA/จุด' : it.w,
       fmt(itemPf(it), 2),
       fmt(itemDf(it) * 100, 0),
       fmt(itemKva(it), 3),

@@ -127,7 +127,7 @@ function sheetItems(ws, p) {
     sheetSetCell(ws, row, 2, catName(it.cat));
     sheetSetCell(ws, row, 3, nnum(it.qty), null, '0');
     sheetSetCell(ws, row, 4, it.btu || '—', null, '0');
-    sheetSetCell(ws, row, 5, nnum(it.w), null, '#,##0');
+    sheetSetCell(ws, row, 5, it.cat === 'outlet' ? nnum(it.w) + ' VA/จุด' : nnum(it.w), null, it.cat === 'outlet' ? null : '#,##0');
     sheetSetCell(ws, row, 6, Math.round(itemPf(it) * 100) / 100, null, '0.00');
     sheetSetCell(ws, row, 7, Math.round(itemDf(it) * 1000) / 10, null, '0.0');
     sheetSetCell(ws, row, 8, Math.round(itemKva(it) * 100) / 100, null, '#,##0.00');
@@ -223,7 +223,7 @@ function buildRows() {
       catName(it.cat),
       it.qty,
       it.btu || '',
-      it.w,
+      it.cat === 'outlet' ? it.w + ' VA/จุด' : it.w,
       fmt(itemPf(it), 2),
       fmt(itemDf(it) * 100, 0),
       fmt(itemKva(it), 3),
