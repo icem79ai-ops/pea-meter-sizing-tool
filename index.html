@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>คำนวณขนาดมิเตอร์ไฟฟ้า (PEA Load & Meter Sizing Tool)</title>
+<link rel="stylesheet" href="style.css">
+<script src="lib/chart.umd.min.js"></script>
+<script src="lib/xlsx.full.min.js"></script>
+</head>
+<body>
+<div id="app">
+
+  <!-- ===== HEADER ===== -->
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand">
+        <span class="brand-icon">&#9889;</span>
+        <div>
+          <h1>คำนวณขนาดมิเตอร์ไฟฟ้า</h1>
+          <span class="brand-sub">ตารางโหลด · กระแส 1 เฟส / 3 เฟส · kVA · แนะนำมิเตอร์ PEA</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== HELP / MANUAL ===== -->
+  <section class="panel" id="help-panel">
+    <details>
+      <summary class="help-summary">คู่มือการใช้งาน (แตะเพื่อเปิด/ปิด)</summary>
+      <div class="help-body">
+        <ol>
+          <li><b>จัดการโครงการ</b> — สร้างโครงการหนึ่งต่อหนึ่งบ้าน/ไซต์งาน เลือกแรงดันไฟฟ้า (ค่าเริ่มต้น 220V / 380V)</li>
+          <li><b>จิ้มเลือกเครื่องใช้ไฟฟ้า</b> — แตะปุ่มตามที่เจ้าของบ้านบอก เช่น "แอร์ 12,000 BTU กี่เครื่อง ปั๊มน้ำกี่เครื่อง น้ำอุ่นกี่เครื่อง" <b>แตะซ้ำ = จำนวนเพิ่มขึ้น</b></li>
+          <li><b>นับหลอดไฟ / เต้ารับ</b> — นับจำนวนจุดแล้วแตะปุ่ม "หลอด LED" / "เต้ารับ 1 จุด" ซ้ำตามจำนวน</li>
+          <li><b>ปรับดีมานด์แฟกเตอร์</b> — ตารางโหลดมีช่อง DF% และค่า PF ให้แก้เองตามประสบการณ์ (ค่าเริ่มต้นจากมาตรฐาน วสท.)</li>
+          <li><b>อ่านผล</b> — กำลังติดตั้ง, ดีมานด์ (kVA), กระแส 1 เฟส และ 3 เฟส พร้อม<b>ขนาดมิเตอร์แนะนำ</b></li>
+          <li><b>ส่งออก</b> — กด CSV / Excel เพื่อดาวน์โหลดตารางโหลด + สรุป ใช้ประกอบเอกสารขอมิเตอร์</li>
+        </ol>
+        <p class="help-tip">เคล็ดลับ: กำลังไฟฟ้า (W) ในปุ่มเป็นค่าเฉลี่ยตามสเปกทั่วไป — แก้ได้ทุกแถวในรายการ · DF% คือสัดส่วนที่เครื่องใช้ทำงานพร้อมกันจริง เช่น แอร์ 3 ตัวไม่ใช่ว่าจะเปิดพร้อมกันเต็มพิกัดทั้ง 3 ตัว</p>
+      </div>
+    </details>
+  </section>
+
+  <!-- ===== PROJECT MANAGEMENT ===== -->
+  <section class="panel" id="project-panel">
+    <div class="panel-head">
+      <h2>โครงการ / ไซต์งาน</h2>
+      <button class="btn btn-primary btn-sm" id="btn-new-project">+ โครงการใหม่</button>
+    </div>
+
+    <div class="project-bar">
+      <label class="field-label" for="project-select">โครงการปัจจุบัน</label>
+      <select id="project-select"></select>
+      <div class="project-actions">
+        <button class="btn btn-ghost btn-sm" id="btn-rename-project">เปลี่ยนชื่อ</button>
+        <button class="btn btn-ghost btn-sm" id="btn-backup" title="ดาวน์โหลดไฟล์สำรองข้อมูลทั้งหมด">สำรองข้อมูล</button>
+        <button class="btn btn-ghost btn-sm" id="btn-restore" title="กู้คืนข้อมูลจากไฟล์สำรอง">กู้คืน</button>
+        <button class="btn btn-danger btn-sm" id="btn-delete-project">ลบ</button>
+        <input type="file" id="restore-file" accept=".json,application/json" class="hidden-input">
+      </div>
+
+      <div class="form-row settings-row">
+        <div>
+          <label class="field-label" for="set-v1">แรงดัน 1 เฟส (V)</label>
+          <input type="number" id="set-v1" min="100" max="1000" step="1">
+        </div>
+        <div>
+          <label class="field-label" for="set-v3">แรงดัน 3 เฟส (V)</label>
+          <input type="number" id="set-v3" min="100" max="1000" step="1">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- New project dialog -->
+  <div class="modal-overlay hidden" id="project-modal">
+    <div class="modal">
+      <h3 id="project-modal-title">โครงการใหม่</h3>
+      <label class="field-label" for="project-name-input">ชื่อโครงการ</label>
+      <input type="text" id="project-name-input" placeholder="เช่น บ้านลุงสมชาย" maxlength="60">
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="btn-project-cancel">ยกเลิก</button>
+        <button class="btn btn-primary" id="btn-project-ok">บันทึก</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== APPLIANCE PRESETS ===== -->
+  <section class="panel" id="preset-panel">
+    <div class="panel-head">
+      <h2>จิ้มเลือกเครื่องใช้ไฟฟ้า</h2>
+      <span class="count-badge">แตะแล้วลงตารางด้านล่าง · แก้ที่ตารางได้</span>
+    </div>
+    <div class="preset-grid" id="preset-grid"></div>
+    <div class="chart-hint">แอร์เลือกขนาดเดียว (12,000 BTU) แล้วพิมพ์ BTU เองที่ตาราง — กำลังไฟคำนวณให้อัตโนมัติ · เครื่องเสียบปลั๊กทั่วไป (ทีวี ตู้เย็น เตารีด ฯลฯ) นับรวมใน "หมวดเต้ารับ" ไม่ต้องจิ้ม</div>
+  </section>
+
+  <!-- ===== LOAD TABLE (replace appliance list) ===== -->
+  <section class="panel" id="load-panel">
+    <div class="panel-head">
+      <h2>รายการเครื่องใช้และตารางโหลด</h2>
+      <span class="count-badge" id="appliance-count">0</span>
+    </div>
+    <div class="table-wrap factor-table-wrap">
+      <table id="factor-table">
+        <thead>
+          <tr>
+            <th>เครื่องใช้</th>
+            <th class="num">จำนวน</th>
+            <th class="num">BTU</th>
+            <th class="num">W/ชิ้น</th>
+            <th class="num">PF</th>
+            <th class="num">DF (%)</th>
+            <th class="num">ติดตั้ง (kVA)</th>
+            <th class="num">ดีมานด์ (kVA)</th>
+            <th class="num"></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <button class="btn btn-ghost btn-block" id="btn-add-custom">+ เพิ่มเครื่องใช้แบบกำหนดเอง</button>
+    <p class="chart-hint">แก้จำนวน/BTU/PF/DF ได้ในตาราง · กำลังไฟ (W) ของแอร์คำนวณจาก BTU อัตโนมัติ · เครื่องเสียบปลั๊กทั่วไปไม่ต้องใส่ (นับในหมวดเต้ารับ)</p>
+  </section>
+
+  <!-- ===== RESULTS ===== -->
+  <section class="panel" id="results-panel">
+    <div class="panel-head">
+      <h2>สรุปและขนาดมิเตอร์</h2>
+      <div class="export-btns">
+        <button class="btn btn-ghost btn-sm" id="btn-export-csv" title="ดาวน์โหลดไฟล์ CSV">CSV</button>
+        <button class="btn btn-ghost btn-sm" id="btn-export-xlsx" title="ดาวน์โหลดไฟล์ Excel">Excel</button>
+      </div>
+    </div>
+
+    <div class="meter-grid">
+      <div class="meter-card">
+        <div class="meter-label">มิเตอร์แนะนำ · 1 เฟส</div>
+        <div class="meter-value" id="meter-1ph">—</div>
+        <div class="meter-sub" id="meter-1ph-sub">ยังไม่มีข้อมูล</div>
+      </div>
+      <div class="meter-card">
+        <div class="meter-label">มิเตอร์แนะนำ · 3 เฟส</div>
+        <div class="meter-value" id="meter-3ph">—</div>
+        <div class="meter-sub" id="meter-3ph-sub">ยังไม่มีข้อมูล</div>
+      </div>
+    </div>
+
+    <div class="metrics-grid" id="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-value" id="m-conn-kw">0.0</div>
+        <div class="metric-label">กำลังติดตั้งรวม (kW)</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value" id="m-conn-kva">0.0</div>
+        <div class="metric-label">กำลังติดตั้งรวม (kVA)</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value" id="m-demand-kva">0.0</div>
+        <div class="metric-label">ดีมานด์รวม (kVA)</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value" id="m-i1">0.0</div>
+        <div class="metric-label" id="m-i1-label">กระแส 1 เฟส (A)</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value" id="m-i3">0.0</div>
+        <div class="metric-label" id="m-i3-label">กระแส 3 เฟส (A/เฟส)</div>
+      </div>
+    </div>
+
+    <div class="chart-wrap">
+      <canvas id="demand-chart"></canvas>
+    </div>
+    <div class="chart-hint">ดีมานด์ (kVA) แยกตามหมวด หลังคูณดีมานด์แฟกเตอร์แล้ว</div>
+
+    <div class="meter-note">พิกัดมิเตอร์เลือกแบบที่โหลด ≤ <strong>80% ของพิกัด</strong> ตามระเบียบ
+      (เช่น โหลด <strong>40 A</strong> → ต้องการมิเตอร์ที่รองรับ ≥ 50 A → ใช้ <strong>15(45)A</strong> ไม่ได้ เพราะ 45×0.8=36 A ต้องใช้ <strong>30(100)A</strong>)</div>
+  </section>
+
+</div>
+
+<div class="toast hidden" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
